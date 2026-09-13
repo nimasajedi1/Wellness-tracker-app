@@ -1,0 +1,31 @@
+# XcodeGen manifest (optional convenience).
+# On your Mac: `brew install xcodegen && cd apps/ios/NimaWellness && xcodegen generate`
+# then open NimaWellness.xcodeproj. Manual project creation steps are in
+# XCODE_SETUP.md if you prefer not to install XcodeGen.
+name: NimaWellness
+options:
+  bundleIdPrefix: com.nimasajedi
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+packages:
+  WellnessCore:
+    path: ../../../packages/WellnessCore
+targets:
+  NimaWellness:
+    type: application
+    platform: iOS
+    sources:
+      - NimaWellness
+    dependencies:
+      - package: WellnessCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        PRODUCT_BUNDLE_IDENTIFIER: com.nimasajedi.nimawellness
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        # Signing team is configured locally in Xcode; never committed (M0.2).
+        CODE_SIGN_STYLE: Automatic

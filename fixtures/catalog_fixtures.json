@@ -1,0 +1,232 @@
+{
+  "schemaVersion": 1,
+  "productionUseAllowed": false,
+  "warning": "Arithmetic/matching fixtures only. Synthetic values are invented test data. Label transcriptions are not live retailer verification. Do not expose this fixture catalog in production search.",
+  "records": [
+    {
+      "foodID": "fixture-ham",
+      "version": "1",
+      "name": "Ham label transcription",
+      "market": "US",
+      "basis": {
+        "amount": 56,
+        "unit": "g"
+      },
+      "nutrients": {
+        "energy_kcal": 60,
+        "protein_g": 9,
+        "fiber_g": 0,
+        "carbohydrate_g": 3,
+        "fat_g": 2,
+        "sodium_mg": 310
+      },
+      "evidence": {
+        "type": "labelTranscription",
+        "projectReference": "U01",
+        "sourceURL": null,
+        "independentlyReverified": false
+      }
+    },
+    {
+      "foodID": "fixture-shake",
+      "version": "1",
+      "name": "Shake label transcription",
+      "market": "US",
+      "basis": {
+        "amount": 1,
+        "unit": "container"
+      },
+      "nutrients": {
+        "energy_kcal": 130,
+        "protein_g": 30,
+        "fiber_g": 1
+      },
+      "evidence": {
+        "type": "labelTranscription",
+        "projectReference": "U02",
+        "sourceURL": null,
+        "independentlyReverified": false
+      }
+    },
+    {
+      "foodID": "fixture-tray",
+      "version": "1",
+      "name": "Meal tray label transcription",
+      "market": "US",
+      "basis": {
+        "amount": 1,
+        "unit": "tray",
+        "edibleMass_g": 340
+      },
+      "nutrients": {
+        "energy_kcal": 500,
+        "protein_g": 43,
+        "fiber_g": 7
+      },
+      "evidence": {
+        "type": "labelTranscription",
+        "projectReference": "U03",
+        "sourceURL": null,
+        "independentlyReverified": false
+      }
+    },
+    {
+      "foodID": "fixture-beans",
+      "version": "1",
+      "name": "Synthetic cooked beans",
+      "market": "US",
+      "basis": {
+        "amount": 100,
+        "unit": "g"
+      },
+      "nutrients": {
+        "energy_kcal": 100,
+        "protein_g": 5,
+        "fiber_g": 4
+      },
+      "evidence": {
+        "type": "syntheticFixture",
+        "projectReference": null,
+        "sourceURL": null,
+        "independentlyReverified": false
+      },
+      "preparation": "cooked"
+    },
+    {
+      "foodID": "fixture-lentils",
+      "version": "1",
+      "name": "Synthetic cooked lentils",
+      "market": "US",
+      "basis": {
+        "amount": 100,
+        "unit": "g"
+      },
+      "nutrients": {
+        "energy_kcal": 120,
+        "protein_g": 8,
+        "fiber_g": 6
+      },
+      "evidence": {
+        "type": "syntheticFixture",
+        "projectReference": null,
+        "sourceURL": null,
+        "independentlyReverified": false
+      },
+      "preparation": "cooked"
+    },
+    {
+      "foodID": "fixture-yogurt-whole",
+      "version": "1",
+      "name": "Synthetic whole-milk yogurt",
+      "market": "US",
+      "basis": {
+        "amount": 100,
+        "unit": "g"
+      },
+      "nutrients": {
+        "energy_kcal": 100,
+        "protein_g": 9,
+        "fiber_g": null,
+        "carbohydrate_g": 4,
+        "fat_g": 5
+      },
+      "evidence": {
+        "type": "syntheticFixture",
+        "projectReference": null,
+        "sourceURL": null,
+        "independentlyReverified": false
+      },
+      "variant": "whole milk"
+    },
+    {
+      "foodID": "fixture-yogurt-nonfat",
+      "version": "1",
+      "name": "Synthetic nonfat yogurt",
+      "market": "US",
+      "basis": {
+        "amount": 100,
+        "unit": "g"
+      },
+      "nutrients": {
+        "energy_kcal": 60,
+        "protein_g": 10,
+        "fiber_g": null,
+        "carbohydrate_g": 4,
+        "fat_g": 0
+      },
+      "evidence": {
+        "type": "syntheticFixture",
+        "projectReference": null,
+        "sourceURL": null,
+        "independentlyReverified": false
+      },
+      "variant": "nonfat"
+    },
+    {
+      "foodID": "fixture-pasta-cooked",
+      "version": "1",
+      "name": "Synthetic pasta, cooked",
+      "market": "US",
+      "basis": {
+        "amount": 100,
+        "unit": "g"
+      },
+      "nutrients": {
+        "energy_kcal": 150,
+        "protein_g": 5,
+        "fiber_g": 2
+      },
+      "evidence": {
+        "type": "syntheticFixture",
+        "projectReference": null,
+        "sourceURL": null,
+        "independentlyReverified": false
+      },
+      "preparation": "cooked"
+    },
+    {
+      "foodID": "fixture-pasta-dry",
+      "version": "1",
+      "name": "Synthetic pasta, dry",
+      "market": "US",
+      "basis": {
+        "amount": 100,
+        "unit": "g"
+      },
+      "nutrients": {
+        "energy_kcal": 360,
+        "protein_g": 12,
+        "fiber_g": 4
+      },
+      "evidence": {
+        "type": "syntheticFixture",
+        "projectReference": null,
+        "sourceURL": null,
+        "independentlyReverified": false
+      },
+      "preparation": "dry"
+    },
+    {
+      "foodID": "fixture-tuna-can",
+      "version": "1",
+      "name": "Synthetic tuna can for reference-ambiguity tests",
+      "market": "US",
+      "basis": {
+        "amount": 1,
+        "unit": "can"
+      },
+      "nutrients": {
+        "energy_kcal": 210,
+        "protein_g": 29,
+        "fiber_g": 0
+      },
+      "evidence": {
+        "type": "syntheticFixture",
+        "projectReference": null,
+        "sourceURL": null,
+        "independentlyReverified": false
+      },
+      "notes": "Not verified tuna nutrition. These values are synthetic for testing reference ambiguity, not a validation of earlier conversation estimates."
+    }
+  ]
+}

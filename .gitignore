@@ -1,0 +1,24 @@
+# Xcode
+*.xcodeproj/
+!*.xcodeproj/project.pbxproj.keep
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+
+# Signing — never commit credentials (M0.2)
+*.mobileprovision
+*.p12
+*.cer

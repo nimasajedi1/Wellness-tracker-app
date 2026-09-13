@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "templateID": "owner-example",
+  "version": 1,
+  "name": "Owner example",
+  "effectiveFrom": "2026-09-13",
+  "metrics": [
+    {
+      "id": "nutrition.protein",
+      "name": "Protein",
+      "category": "nutrition",
+      "valueType": "quantity",
+      "canonicalUnit": "g",
+      "aggregation": "sum",
+      "input": {
+        "kind": "counter",
+        "step": 10
+      },
+      "goal": {
+        "kind": "minimum",
+        "period": "day",
+        "displayTarget": {
+          "lower": 140,
+          "upper": 150,
+          "unit": "g"
+        },
+        "metMinimum": 130,
+        "nearMinimum": 97.5,
+        "missingPolicy": "incomplete"
+      }
+    },
+    {
+      "id": "hydration.water",
+      "name": "Water",
+      "category": "hydration",
+      "valueType": "quantity",
+      "canonicalUnit": "mL",
+      "displayUnit": "L",
+      "aggregation": "sum",
+      "input": {
+        "kind": "counter",
+        "step": 250
+      },
+      "goal": {
+        "kind": "minimum",
+        "period": "day",
+        "displayTarget": {
+          "lower": 2000,
+          "upper": 2500,
+          "unit": "mL"
+        },
+        "metMinimum": 2000,
+        "nearMinimum": 1500,
+        "missingPolicy": "incomplete"
+      }
+    },
+    {
+      "id": "custom.caffeine",
+      "name": "Caffeine",
+      "category": "intakeHabits",
+      "valueType": "quantity",
+      "canonicalUnit": "mg",
+      "aggregation": "sum",
+      "input": {
+        "kind": "number",
+        "step": 25
+      },
+      "goal": {
+        "kind": "trendOnly"
+      }
+    }
+  ],
+  "layout": [
+    {
+      "cardID": "protein-card",
+      "metricIDs": [
+        "nutrition.protein"
+      ],
+      "width": "half",
+      "order": 0
+    },
+    {
+      "cardID": "water-card",
+      "metricIDs": [
+        "hydration.water"
+      ],
+      "width": "half",
+      "order": 1
+    },
+    {
+      "cardID": "caffeine-card",
+      "metricIDs": [
+        "custom.caffeine"
+      ],
+      "width": "full",
+      "order": 2
+    }
+  ]
+}
