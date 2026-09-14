@@ -8,6 +8,8 @@ struct ChatView: View {
     @Environment(AppModel.self) private var appModel
     @State private var chatModel: ChatModel?
     @FocusState private var composerFocused: Bool
+    @State private var showBarcodeScanner = false
+    @State private var showLabelCapture = false
 
     var body: some View {
         NavigationStack {
@@ -28,7 +30,31 @@ struct ChatView: View {
                         .foregroundStyle(Theme.secondaryText)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    availabilityBadge
+                    HStack(spacing: 12) {
+                        Button {
+                            showBarcodeScanner = true
+                        } label: {
+                            Image(systemName: "barcode.viewfinder")
+                        }
+                        .accessibilityLabel("Scan barcode")
+                        Button {
+                            showLabelCapture = true
+                        } label: {
+                            Image(systemName: "text.viewfinder")
+                        }
+                        .accessibilityLabel("Capture nutrition label")
+                        availabilityBadge
+                    }
+                }
+            }
+            .sheet(isPresented: $showBarcodeScanner) {
+                BarcodeScannerSheet { code in
+                    chatModel?.handleScannedBarcode(code)
+                }
+            }
+            .sheet(isPresented: $showLabelCapture) {
+                LabelCaptureSheet { food in
+                    chatModel?.announceSavedLabelFood(food)
                 }
             }
         }
@@ -236,6 +262,10 @@ struct ResultCardView: View {
                             chatModel.addPreview(preview)
                         }
                         .buttonStyle(.borderedProminent)
+                        Button("Save favorite") {
+                            chatModel.saveFavorite(from: preview)
+                        }
+                        .buttonStyle(.bordered)
                     }
                 }
                 .font(.footnote)

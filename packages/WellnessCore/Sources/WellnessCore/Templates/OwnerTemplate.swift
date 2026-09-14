@@ -247,4 +247,50 @@ public enum OwnerTemplate {
             effectiveFrom: effectiveFrom, metrics: [], goals: [], layout: []
         )
     }
+
+    /// Busy workday: same canonical metrics, hydration and supplements first,
+    /// fasting hidden, calorie balance kept full-width at the bottom.
+    public static func busyWorkday(effectiveFrom: LogDay) -> TrackerConfiguration {
+        var config = configuration(effectiveFrom: effectiveFrom)
+        config.templateID = "busyWorkday"
+        config.name = "Busy workday"
+        config.hiddenMetricIDs = [OwnerMetrics.fasting]
+        var cards = config.layout
+        func setOrder(_ cardID: String, _ order: Int) {
+            if let index = cards.firstIndex(where: { $0.cardID == cardID }) { cards[index].order = order }
+        }
+        setOrder("card.hydration", 0)
+        setOrder("card.supplements", 1)
+        setOrder("card.nutrition", 2)
+        setOrder("card.activity", 3)
+        setOrder("card.sleepFasting", 4)
+        setOrder("card.calorieBalance", 5)
+        config.layout = cards
+        return config
+    }
+
+    /// Travel day: layout/shortcut changes only, applied on explicit selection
+    /// (BUILD-001) — no location monitoring is involved. Hydration and sleep
+    /// lead; the balance comparison is hidden rather than judged with
+    /// incomplete travel data.
+    public static func travelDay(effectiveFrom: LogDay) -> TrackerConfiguration {
+        var config = configuration(effectiveFrom: effectiveFrom)
+        config.templateID = "travelDay"
+        config.name = "Travel day"
+        config.hiddenMetricIDs = [OwnerMetrics.fasting, OwnerMetrics.activeEnergy]
+        var cards = config.layout
+        if let index = cards.firstIndex(where: { $0.cardID == "card.calorieBalance" }) {
+            cards[index].isHidden = true
+        }
+        func setOrder(_ cardID: String, _ order: Int) {
+            if let cardIndex = cards.firstIndex(where: { $0.cardID == cardID }) { cards[cardIndex].order = order }
+        }
+        setOrder("card.hydration", 0)
+        setOrder("card.sleepFasting", 1)
+        setOrder("card.nutrition", 2)
+        setOrder("card.activity", 3)
+        setOrder("card.supplements", 4)
+        config.layout = cards
+        return config
+    }
 }

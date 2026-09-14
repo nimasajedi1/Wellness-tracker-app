@@ -73,8 +73,21 @@ struct BuilderView: View {
                 } label: {
                     Label("Add field…", systemImage: "plus.circle")
                 }
+                Menu {
+                    // BUILD-001/BUILD-013: templates are views over the same
+                    // canonical metric IDs; switching never duplicates the
+                    // underlying fact stream, and Travel applies only on this
+                    // explicit selection.
+                    Button("Owner") { loadTemplate(OwnerTemplate.configuration(effectiveFrom: appModel.selectedDay)) }
+                    Button("Minimal day") { loadTemplate(OwnerTemplate.minimalDay(effectiveFrom: appModel.selectedDay)) }
+                    Button("Busy workday") { loadTemplate(OwnerTemplate.busyWorkday(effectiveFrom: appModel.selectedDay)) }
+                    Button("Travel day") { loadTemplate(OwnerTemplate.travelDay(effectiveFrom: appModel.selectedDay)) }
+                    Button("Blank") { loadTemplate(OwnerTemplate.blank(effectiveFrom: appModel.selectedDay)) }
+                } label: {
+                    Label("Start from template…", systemImage: "square.on.square")
+                }
             } footer: {
-                Text("New fields are typed registry entries — a caffeine limit or a stretch-break count needs no code and no migration.")
+                Text("New fields are typed registry entries — a caffeine limit or a stretch-break count needs no code and no migration. Templates are starting points over the same data; loading one is a draft until Save.")
             }
 
             Section("Cards (top to bottom)") {
@@ -126,6 +139,10 @@ struct BuilderView: View {
 
     private func resetDraft() {
         draft = appModel.configuration
+    }
+
+    private func loadTemplate(_ template: TrackerConfiguration) {
+        draft = template
     }
 
     private func publish() {

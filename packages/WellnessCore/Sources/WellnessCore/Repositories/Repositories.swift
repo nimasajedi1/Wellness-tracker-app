@@ -19,6 +19,9 @@ public protocol ConfigurationRepository: Sendable {
 public protocol FoodCatalogRepository: Sendable {
     func searchLocal(query: String, market: String) async throws -> [FoodVersion]
     func foodVersion(foodID: String, versionID: String) async throws -> FoodVersion?
+    /// Exact barcode lookup (CAT-006, DEVICE-001). The GTIN must already be
+    /// checksum-validated; matching is against stored identifier keys only.
+    func foodByBarcode(_ gtin: String, market: String) async throws -> [FoodVersion]
     func aliases(matching text: String) async throws -> [FoodAlias]
     func saveAlias(_ alias: FoodAlias) async throws
 }
@@ -101,6 +104,17 @@ public actor InMemoryFoodCatalogRepository: FoodCatalogRepository {
 
     public func foodVersion(foodID: String, versionID: String) async throws -> FoodVersion? {
         foods["\(foodID)#\(versionID)"]
+    }
+
+    public func foodByBarcode(_ gtin: String, market: String) async throws -> [FoodVersion] {
+        let keys = Set(Barcode.lookupKeys(for: gtin))
+        return foods.values.filter { food in
+            food.marketCountry == market &&
+            food.evidence.evidenceType != .syntheticFixture &&
+            food.identifiers.contains { key, value in
+                (key == "gtin" || key == "upc") && keys.contains(value.filter(\.isNumber))
+            }
+        }.sorted { $0.canonicalName < $1.canonicalName }
     }
 
     public func aliases(matching text: String) async throws -> [FoodAlias] {

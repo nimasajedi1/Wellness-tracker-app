@@ -34,9 +34,16 @@ M0 scaffolding plus the M1 tracker slice and early M2/M3 slices, as code:
   Settings (opt-in energy profile, day completion), SwiftData persistence,
   and the explicit `SystemLanguageModel` adapter gated behind availability.
 
-Not yet built (by design, per the milestone plan): web resolver (M4), USDA
-catalog packs (M5), Developer Lab/beta evidence (M6), HealthKit/barcode/widgets
-(P1).
+- **P1 features** (second commit): read-only HealthKit integration with
+  per-type opt-in, exclusive source policies and idempotent imports; HealthKit
+  and fixed-total energy methods; barcode scanning with GS1 checksum
+  validation; label capture (on-device OCR + explicit review); hydration and
+  status widgets plus Shortcuts quick actions through the same idempotent
+  commands; local reminders with quiet hours; Busy workday and Travel day
+  templates. See `docs/P1_HANDOFF.md`.
+
+Not yet built (by design, per the milestone plan): web resolver and restaurant
+adapters (M4), USDA catalog packs (M5), Developer Lab/beta evidence (M6).
 
 ## Building
 

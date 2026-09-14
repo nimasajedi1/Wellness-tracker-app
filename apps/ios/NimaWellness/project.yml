@@ -19,13 +19,49 @@ targets:
       - NimaWellness
     dependencies:
       - package: WellnessCore
+      - target: NimaWellnessWidgets
+        embed: true
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        # P1 permission strings (HEALTH-001 purposes; camera only for the
+        # optional barcode scanner — normal lookup never needs it).
+        INFOPLIST_KEY_NSHealthShareUsageDescription: "Reads only the health types you enable (steps, energy, sleep, weight) to fill your tracker. Reading is optional; manual entry always works."
+        INFOPLIST_KEY_NSCameraUsageDescription: "Used only when you open the barcode scanner. Typed search works without the camera."
         PRODUCT_BUNDLE_IDENTIFIER: com.nimasajedi.nimawellness
+        CODE_SIGN_ENTITLEMENTS: NimaWellness/NimaWellness.entitlements
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         # Signing team is configured locally in Xcode; never committed (M0.2).
+        CODE_SIGN_STYLE: Automatic
+
+  NimaWellnessWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      # Widget UI plus the shared files it compiles directly (see the header
+      # of NimaWellnessWidgets.swift).
+      - path: ../NimaWellnessWidgets
+      - path: NimaWellness/Infrastructure/Shared/WidgetSnapshot.swift
+      - path: NimaWellness/Infrastructure/Persistence/PersistenceFactory.swift
+      - path: NimaWellness/Infrastructure/Persistence/PersistentModels.swift
+      - path: NimaWellness/Infrastructure/Persistence/PersonalStore.swift
+      - path: NimaWellness/AppIntents/QuickActionIntents.swift
+      - path: NimaWellness/Features/Chat/SeedCatalog.swift
+    dependencies:
+      - package: WellnessCore
+    info:
+      path: ../NimaWellnessWidgets/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_BUNDLE_IDENTIFIER: com.nimasajedi.nimawellness.widgets
+        CODE_SIGN_ENTITLEMENTS: ../NimaWellnessWidgets/NimaWellnessWidgets.entitlements
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
