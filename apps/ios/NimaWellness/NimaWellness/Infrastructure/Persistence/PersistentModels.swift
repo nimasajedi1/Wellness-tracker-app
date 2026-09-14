@@ -5,7 +5,10 @@ import WellnessCore
 /// SwiftData records wrap JSON-encoded domain payloads with a schema version
 /// (STORE-001). The domain structs in WellnessCore stay the source of truth;
 /// these records are storage envelopes with queryable index columns.
-let personalStoreSchemaVersion = 1
+/// v2 adds the optional externalSampleID index column (HealthKit import
+/// idempotence, HEALTH-003) and the user-food/alias records — additive,
+/// lightweight-migratable changes.
+let personalStoreSchemaVersion = 2
 
 @Model
 final class ObservationRecord {
@@ -14,6 +17,8 @@ final class ObservationRecord {
     var logDay: String
     var observedAt: Date
     var isDeleted: Bool
+    /// Stable ID for imported samples so reimports replace instead of add.
+    var externalSampleID: String?
     var schemaVersion: Int
     var payload: Data
 
@@ -23,6 +28,7 @@ final class ObservationRecord {
         self.logDay = observation.logDay.isoString
         self.observedAt = observation.observedAt
         self.isDeleted = observation.isDeleted
+        self.externalSampleID = observation.externalSampleID
         self.schemaVersion = personalStoreSchemaVersion
         self.payload = try JSONEncoder.domain.encode(observation)
     }
@@ -36,7 +42,55 @@ final class ObservationRecord {
         logDay = observation.logDay.isoString
         observedAt = observation.observedAt
         isDeleted = observation.isDeleted
+        externalSampleID = observation.externalSampleID
         payload = try JSONEncoder.domain.encode(observation)
+    }
+}
+
+/// Foods the user created from reviewed label captures (DEVICE-002). Private
+/// records with userEnteredLabel evidence; never published anywhere (CAT-013).
+@Model
+final class UserFoodRecord {
+    @Attribute(.unique) var key: String   // foodID#versionID
+    var canonicalName: String
+    var schemaVersion: Int
+    var payload: Data
+
+    init(food: FoodVersion) throws {
+        self.key = food.id
+        self.canonicalName = food.canonicalName
+        self.schemaVersion = personalStoreSchemaVersion
+        self.payload = try JSONEncoder.domain.encode(food)
+    }
+
+    func decoded() throws -> FoodVersion {
+        try JSONDecoder.domain.decode(FoodVersion.self, from: payload)
+    }
+}
+
+/// Private aliases/favorites (FOOD-012/014): identity plus optional preferred
+/// portion, never a remembered nutrient number.
+@Model
+final class FoodAliasRecord {
+    @Attribute(.unique) var id: UUID
+    var alias: String
+    var schemaVersion: Int
+    var payload: Data
+
+    init(alias: FoodAlias) throws {
+        self.id = alias.id
+        self.alias = alias.alias
+        self.schemaVersion = personalStoreSchemaVersion
+        self.payload = try JSONEncoder.domain.encode(alias)
+    }
+
+    func decoded() throws -> FoodAlias {
+        try JSONDecoder.domain.decode(FoodAlias.self, from: payload)
+    }
+
+    func update(from alias: FoodAlias) throws {
+        self.alias = alias.alias
+        payload = try JSONEncoder.domain.encode(alias)
     }
 }
 

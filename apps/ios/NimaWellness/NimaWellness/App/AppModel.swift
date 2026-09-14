@@ -42,6 +42,22 @@ final class AppModel {
     /// Days the user explicitly marked complete (ENERGY-007).
     private(set) var completedDays: Set<String> = []
 
+    // MARK: P1 state
+
+    /// Exclusive expenditure method (ENERGY-003/004). nil falls back to
+    /// restingPlusActive when a resting input is configured.
+    var expenditureMethod: ExpenditureMethod? {
+        didSet { persistExpenditureMethod() }
+    }
+    /// Per-metric exclusive source selection (HEALTH-003): manual and imported
+    /// values never sum together.
+    private(set) var sourcePolicies: [MetricID: MetricSourcePolicy] = [:]
+    private(set) var enabledHealthTypes: Set<HealthDataType> = []
+    private(set) var healthStatusMessage: String?
+    private(set) var userFoods: [FoodVersion] = []
+    private(set) var favorites: [FoodAlias] = []
+    let healthService = HealthKitService()
+
     let interpreter: any NutritionInterpreter
     let dateProvider: DateProviding
     private var store: PersonalStore?
@@ -55,6 +71,48 @@ final class AppModel {
         self.interpreter = interpreter ?? InterpreterFactory.make()
         self.selectedDay = LogDay(date: dateProvider.now(), timeZone: dateProvider.timeZone)
         self.completedDays = Set(UserDefaults.standard.stringArray(forKey: "completedDays") ?? [])
+        restoreP1Settings()
+    }
+
+    // MARK: P1 settings persistence (UserDefaults; versioned store follows M2)
+
+    private func restoreP1Settings() {
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: "expenditureMethod"),
+           let method = try? JSONDecoder().decode(ExpenditureMethod.self, from: data) {
+            expenditureMethod = method
+        }
+        if let raw = defaults.dictionary(forKey: "sourcePolicies") as? [String: String] {
+            for (key, value) in raw {
+                if let policy = MetricSourcePolicy(rawValue: value) {
+                    sourcePolicies[MetricID(key)] = policy
+                }
+            }
+        }
+        if let raw = defaults.stringArray(forKey: "enabledHealthTypes") {
+            enabledHealthTypes = Set(raw.compactMap { HealthDataType(rawValue: $0) })
+        }
+        if let mode = defaults.string(forKey: "balanceMode").flatMap(BalanceGoalMode.init(rawValue:)) {
+            balanceMode = mode
+        }
+    }
+
+    private func persistExpenditureMethod() {
+        let defaults = UserDefaults.standard
+        if let method = expenditureMethod, let data = try? JSONEncoder().encode(method) {
+            defaults.set(data, forKey: "expenditureMethod")
+        } else {
+            defaults.removeObject(forKey: "expenditureMethod")
+        }
+    }
+
+    private func persistHealthSettings() {
+        let defaults = UserDefaults.standard
+        defaults.set(
+            sourcePolicies.reduce(into: [String: String]()) { $0[$1.key.rawValue] = $1.value.rawValue },
+            forKey: "sourcePolicies"
+        )
+        defaults.set(enabledHealthTypes.map(\.rawValue), forKey: "enabledHealthTypes")
     }
 
     var isSelectedDayToday: Bool {
@@ -87,6 +145,8 @@ final class AppModel {
                     configuration = owner
                 }
                 ledger = try store.loadLedger()
+                userFoods = (try? store.loadUserFoods()) ?? []
+                favorites = (try? store.loadAliases()) ?? []
             } else {
                 configuration = OwnerTemplate.configuration(effectiveFrom: selectedDay)
             }
@@ -114,6 +174,43 @@ final class AppModel {
         if let store {
             dayObservations = try store.observations(on: selectedDay)
         }
+        publishWidgetSnapshot()
+    }
+
+    /// Publish the day summary for widgets after every reload/mutation so
+    /// widgets track the same records as the app (UI-002, DEVICE-003). The
+    /// snapshot is coarse day-level data only — nothing sensitive beyond the
+    /// totals the user chose to track.
+    private func publishWidgetSnapshot() {
+        let water = aggregated(OwnerMetrics.water)
+        let protein = aggregated(OwnerMetrics.protein)
+        let supplements = aggregated(OwnerMetrics.supplements)
+        let evaluationMap = evaluations()
+
+        var statuses: [String: String] = [:]
+        let titles: [(GoalID, String)] = [
+            (OwnerGoals.water, "Hydration"),
+            (OwnerGoals.nutritionGroup, "Nutrition"),
+            (OwnerGoals.exercise, "Exercise"),
+            (OwnerGoals.supplements, "Supplements")
+        ]
+        for (goalID, title) in titles {
+            if let evaluation = evaluationMap[goalID] {
+                statuses[title] = evaluation.status.rawValue
+            }
+        }
+
+        WidgetSnapshotStore.write(WidgetSnapshot(
+            dayISO: selectedDay.isoString,
+            waterML: water.hasAnyObservation ? water.numericValue : nil,
+            waterGoalML: configuration?.goals.first { $0.id == OwnerGoals.water }?.bounds.metMinimum,
+            proteinG: protein.hasAnyObservation ? protein.numericValue : nil,
+            proteinGoalG: configuration?.goals.first { $0.id == OwnerGoals.protein }?.bounds.metMinimum,
+            supplementsDone: supplements.checklistDone,
+            supplementsTotal: supplements.checklistTotal,
+            statuses: statuses,
+            generatedAt: dateProvider.now()
+        ))
     }
 
     // MARK: Aggregation and evaluation
@@ -137,7 +234,25 @@ final class AppModel {
             )
         }
         guard let metric = metricDefinition(metricID) else { return .unrecorded(metricID) }
-        return MetricAggregator.aggregate(metric: metric, observations: dayObservations)
+        // Exclusive source selection (HEALTH-003): only observations admitted
+        // by the metric's policy participate; manual + imported never sum.
+        let policy = sourcePolicies[metricID] ?? .manual
+        let admitted = dayObservations.filter { policy.admits($0.source) }
+        return MetricAggregator.aggregate(metric: metric, observations: admitted)
+    }
+
+    /// Direct daily sum of imported health observations for metrics that are
+    /// engine inputs rather than dashboard cards (ENERGY-003).
+    private func importedHealthTotal(_ metricID: MetricID) -> Double? {
+        var total = 0.0
+        var found = false
+        for observation in dayObservations where observation.metricID == metricID && observation.source == .healthKit {
+            if case .quantity(let value, _) = observation.value {
+                total += value
+                found = true
+            }
+        }
+        return found ? total : nil
     }
 
     /// All goal evaluations for the selected day using the one production
@@ -174,12 +289,33 @@ final class AppModel {
         let intake = aggregated(OwnerMetrics.calories)
         let active = aggregated(OwnerMetrics.activeEnergy)
         let dayMarkedComplete = completedDays.contains(selectedDay.isoString)
+
+        // Method selection is exclusive (ENERGY-005): the generalized engine
+        // only reads the inputs its method defines.
+        guard let method = expenditureMethod ?? restingInput.map({ ExpenditureMethod.restingPlusActive($0) }) else {
+            return EnergyEngine.evaluateDay(
+                intakeKcal: intake.hasAnyObservation ? intake.numericValue : nil,
+                intakeCoverageComplete: dayMarkedComplete,
+                restingInput: nil,
+                activeKcal: active.hasAnyObservation ? active.numericValue : nil,
+                activeConfirmed: dayMarkedComplete,
+                mode: balanceMode
+            )
+        }
+
+        let inputs = ExpenditureInputs(
+            loggedActiveKcal: active.hasAnyObservation ? active.numericValue : nil,
+            healthKitRestingKcal: importedHealthTotal(HealthMetrics.restingEnergy),
+            healthKitActiveKcal: importedHealthTotal(HealthMetrics.activeEnergy),
+            // Same-day samples cannot cover the full day yet (ENERGY-003).
+            healthKitCoversFullDay: dateContext.isPastDay
+        )
         return EnergyEngine.evaluateDay(
             intakeKcal: intake.hasAnyObservation ? intake.numericValue : nil,
             intakeCoverageComplete: dayMarkedComplete,
-            restingInput: restingInput,
-            activeKcal: active.hasAnyObservation ? active.numericValue : nil,
-            activeConfirmed: dayMarkedComplete,
+            method: method,
+            inputs: inputs,
+            dayMarkedComplete: dayMarkedComplete,
             mode: balanceMode
         )
     }
@@ -381,6 +517,149 @@ final class AppModel {
             throw first
         }
         configuration = next
+    }
+
+    // MARK: HealthKit (P1, read-only)
+
+    /// Enable or disable one health type. Enabling requests permission for
+    /// exactly that set (HEALTH-001) and switches the affected metric's source
+    /// policy; disabling stops future imports (HEALTH-007) and returns the
+    /// metric to manual entry.
+    func setHealthType(_ type: HealthDataType, enabled: Bool) async {
+        if enabled {
+            do {
+                try await healthService.requestReadAuthorization(for: enabledHealthTypes.union([type]))
+            } catch {
+                // HEALTH-002: unavailable is reported as unavailable; a denied
+                // read is indistinguishable from no data and never claimed.
+                healthStatusMessage = "Health data is not available on this device."
+                return
+            }
+            enabledHealthTypes.insert(type)
+        } else {
+            enabledHealthTypes.remove(type)
+        }
+        switch type {
+        case .steps:
+            sourcePolicies[OwnerMetrics.steps] = enabled ? .healthKit : .manual
+        case .activeEnergy:
+            sourcePolicies[OwnerMetrics.activeEnergy] = enabled ? .healthKit : .manual
+        case .sleep:
+            sourcePolicies[OwnerMetrics.sleep] = enabled ? .healthKit : .manual
+        case .restingEnergy, .bodyMass:
+            break
+        }
+        persistHealthSettings()
+        if enabled {
+            await importHealthData()
+        }
+    }
+
+    /// Import the enabled types for the selected day. Idempotent: daily totals
+    /// carry stable external sample IDs, and each metric/day import replaces
+    /// the previous imported set (HEALTH-003).
+    func importHealthData() async {
+        guard let store, !enabledHealthTypes.isEmpty else { return }
+        let timeZone = dateProvider.timeZone
+        let now = dateProvider.now()
+        let day = selectedDay
+        var failures: [String] = []
+
+        for type in enabledHealthTypes {
+            do {
+                switch type {
+                case .steps, .activeEnergy, .restingEnergy, .bodyMass:
+                    let value = try await healthService.dailyQuantity(type, day: day, timeZone: timeZone)
+                    // Which metrics this type's daily total feeds. Active energy
+                    // feeds the engine input, and additionally the dashboard
+                    // metric only while that metric's policy is healthKit — the
+                    // policy keeps sources exclusive either way (ENERGY-005).
+                    var targets: [(MetricID, UnitOfMeasure)]
+                    switch type {
+                    case .steps: targets = [(OwnerMetrics.steps, .step)]
+                    case .restingEnergy: targets = [(HealthMetrics.restingEnergy, .kilocalorie)]
+                    case .bodyMass: targets = [(HealthMetrics.bodyMass, .kilogram)]
+                    case .activeEnergy:
+                        targets = [(HealthMetrics.activeEnergy, .kilocalorie), (OwnerMetrics.activeEnergy, .kilocalorie)]
+                    case .sleep: targets = []
+                    }
+                    for (metricID, unit) in targets {
+                        // No readable samples -> the imported set is empty:
+                        // unknown stays unknown, and the UI never claims the
+                        // user denied permission (HEALTH-002).
+                        let observations = value.map { value in
+                            [HealthImportMapper.observation(
+                                from: ImportedDailyQuantity(metricID: metricID, day: day, value: value, unit: unit, coversFullDay: dateContext.isPastDay),
+                                timeZone: timeZone, importedAt: now
+                            )]
+                        } ?? []
+                        try store.replaceHealthObservations(metricID: metricID, day: day, with: observations)
+                    }
+                case .sleep:
+                    let intervals = try await healthService.sleepIntervals(day: day, timeZone: timeZone)
+                    let observations = HealthImportMapper.sleepObservations(
+                        metricID: OwnerMetrics.sleep, intervals: intervals,
+                        day: day, timeZone: timeZone, importedAt: now
+                    )
+                    try store.replaceHealthObservations(metricID: OwnerMetrics.sleep, day: day, with: observations)
+                }
+            } catch {
+                failures.append(type.displayName)
+            }
+        }
+        healthStatusMessage = failures.isEmpty
+            ? "Imported \(day.isoString) from Health."
+            : "Could not read: \(failures.joined(separator: ", ")). Existing values are unchanged."
+        try? reloadDay()
+    }
+
+    /// Disconnect entirely: stops imports; optionally clears imported copies.
+    /// Samples in the health store itself are never deleted (HEALTH-007).
+    func disconnectHealth(clearImportedCopies: Bool) {
+        enabledHealthTypes = []
+        sourcePolicies[OwnerMetrics.steps] = .manual
+        sourcePolicies[OwnerMetrics.activeEnergy] = .manual
+        sourcePolicies[OwnerMetrics.sleep] = .manual
+        persistHealthSettings()
+        if clearImportedCopies {
+            try? store?.deleteAllHealthObservations()
+            try? reloadDay()
+        }
+        healthStatusMessage = "Health imports stopped."
+    }
+
+    // MARK: User foods and favorites (P1)
+
+    /// Save a reviewed label-capture food (DEVICE-002). Private, never shared.
+    func saveUserFood(_ food: FoodVersion) {
+        do {
+            try store?.saveUserFood(food)
+            if !userFoods.contains(where: { $0.id == food.id }) {
+                userFoods.append(food)
+            }
+        } catch {
+            lastError = "Could not save food: \(error.localizedDescription)"
+        }
+    }
+
+    /// Save a favorite: identity plus preferred portion (FOOD-014).
+    func saveFavorite(_ alias: FoodAlias) {
+        do {
+            try store?.saveAlias(alias)
+            favorites.removeAll { $0.id == alias.id }
+            favorites.append(alias)
+        } catch {
+            lastError = "Could not save favorite: \(error.localizedDescription)"
+        }
+    }
+
+    /// All foods resolvable locally: the user's own label foods plus seeds.
+    var resolvableFoods: [FoodVersion] {
+        SeedCatalog.foods + userFoods
+    }
+
+    var resolvableAliases: [FoodAlias] {
+        SeedCatalog.aliases + favorites
     }
 
     // MARK: History

@@ -25,6 +25,9 @@ struct MealPreview: Identifiable {
     /// idempotent (CHAT-016).
     let mutationID = UUID()
     var items: [MealItemSnapshot]
+    /// Portions parallel to `items`, kept so Save favorite can store the
+    /// preferred portion with the identity (FOOD-014).
+    var portions: [PortionRequest] = []
     var unresolvedMentions: [InterpretedTurn.FoodMention]
     var isHypothetical: Bool
     var logDay: LogDay
@@ -41,19 +44,16 @@ final class ChatModel {
     var composerText = ""
 
     private let appModel: AppModel
-    private let catalog: InMemoryFoodCatalogRepository
     private var interpretTask: Task<Void, Never>?
 
     init(appModel: AppModel) {
         self.appModel = appModel
-        let catalog = InMemoryFoodCatalogRepository(foods: SeedCatalog.foods)
-        self.catalog = catalog
-        Task {
-            for alias in SeedCatalog.aliases {
-                try? await catalog.saveAlias(alias)
-            }
-        }
     }
+
+    /// Foods and aliases resolvable right now: seeds plus the user's own
+    /// label-captured foods and favorites — all local, all evidence-labeled.
+    private var catalogFoods: [FoodVersion] { appModel.resolvableFoods }
+    private var catalogAliases: [FoodAlias] { appModel.resolvableAliases }
 
     // MARK: Sending
 
@@ -91,7 +91,7 @@ final class ChatModel {
                 .map { entry in
                     (id: entry.id, summary: entry.currentRevision?.items.map(\.displayName).joined(separator: ", ") ?? "meal")
                 },
-            savedAliases: SeedCatalog.aliases.map(\.alias)
+            savedAliases: catalogAliases.map(\.alias)
         )
         do {
             let turn = try await appModel.interpreter.interpret(text, context: context)
@@ -114,10 +114,12 @@ final class ChatModel {
         case .logFood, .lookupFood, .hypothetical, .compare:
             let isHypothetical = turn.intent != .logFood
             var resolvedItems: [MealItemSnapshot] = []
+            var resolvedPortions: [PortionRequest] = []
             var unresolved: [InterpretedTurn.FoodMention] = []
             for mention in turn.items {
-                if let snapshot = await resolve(mention: mention) {
-                    resolvedItems.append(snapshot)
+                if let resolved = await resolve(mention: mention) {
+                    resolvedItems.append(resolved.snapshot)
+                    resolvedPortions.append(resolved.portion)
                 } else {
                     unresolved.append(mention)
                 }
@@ -128,6 +130,7 @@ final class ChatModel {
             }
             let preview = MealPreview(
                 items: resolvedItems,
+                portions: resolvedPortions,
                 unresolvedMentions: unresolved,
                 isHypothetical: isHypothetical,
                 logDay: turn.targetLogDay ?? appModel.selectedDay
@@ -179,16 +182,20 @@ final class ChatModel {
 
     // MARK: Resolution (deterministic; the model never supplies nutrients)
 
-    private func resolve(mention: InterpretedTurn.FoodMention) async -> MealItemSnapshot? {
+    private func resolve(mention: InterpretedTurn.FoodMention) async -> (snapshot: MealItemSnapshot, portion: PortionRequest)? {
         var food: FoodVersion?
-        if mention.reference == .savedAlias || mention.normalizedQuery.hasPrefix("my ") {
-            if let alias = try? await catalog.aliases(matching: mention.normalizedQuery).first,
-               let version = try? await catalog.foodVersion(foodID: alias.foodID, versionID: alias.preferredVersionID ?? "1") {
-                food = version
+        let query = mention.normalizedQuery.lowercased()
+        if mention.reference == .savedAlias || query.hasPrefix("my ") {
+            if let alias = catalogAliases.first(where: { query.contains($0.alias.lowercased()) || $0.alias.lowercased().contains(query) }) {
+                food = catalogFoods.first { $0.foodID == alias.foodID }
             }
         }
         if food == nil {
-            food = (try? await catalog.searchLocal(query: mention.normalizedQuery, market: "US"))?.first
+            food = catalogFoods.first { candidate in
+                candidate.marketCountry == "US" &&
+                candidate.evidence.evidenceType != .syntheticFixture &&
+                candidate.canonicalName.lowercased().contains(query)
+            }
         }
         guard let food else { return nil }
 
@@ -211,11 +218,26 @@ final class ChatModel {
         }
 
         guard let scaled = try? PortionEngine.scale(food: food, portion: portion) else { return nil }
-        return MealItemSnapshot.from(
+        let snapshot = MealItemSnapshot.from(
             food: food,
             scaled: scaled,
             portionDescription: describe(portion)
         )
+        return (snapshot, portion)
+    }
+
+    /// Save the preview's first item as a favorite: identity plus preferred
+    /// portion, never a remembered nutrient number (FOOD-012/014).
+    func saveFavorite(from preview: MealPreview) {
+        guard let item = preview.items.first else { return }
+        let alias = FoodAlias(
+            alias: item.displayName.lowercased(),
+            foodID: item.foodID,
+            preferredVersionID: item.foodVersionID,
+            defaultPortion: preview.portions.first
+        )
+        appModel.saveFavorite(alias)
+        append(.receipt("Saved favorite “\(alias.alias)”\(alias.defaultPortion != nil ? " with its portion" : ""). Quick actions and Shortcuts can log it."))
     }
 
     private func describe(_ portion: PortionRequest) -> String {
@@ -225,6 +247,49 @@ final class ChatModel {
         case .servings(let n): return "\(n) serving(s)"
         case .countWithUnitMass(let count, let mass): return "\(count) × \(mass) g"
         }
+    }
+
+    // MARK: Scanner and label capture (P1)
+
+    /// Resolve a scanned barcode through the same local catalog (DEVICE-001).
+    /// Invalid checksums and unknown codes fall back to typed search — never a
+    /// guessed product.
+    func handleScannedBarcode(_ raw: String) {
+        guard let gtin = Barcode.validatedGTIN(raw) else {
+            append(.assistantText("That barcode could not be read reliably. Try again, or type the product name to search."))
+            return
+        }
+        let keys = Set(Barcode.lookupKeys(for: gtin))
+        let matches = catalogFoods.filter { food in
+            food.evidence.evidenceType != .syntheticFixture &&
+            food.identifiers.contains { key, value in
+                (key == "gtin" || key == "upc") && keys.contains(value.filter(\.isNumber))
+            }
+        }
+        guard let food = matches.first else {
+            append(.assistantText("Barcode \(gtin) is not in your local foods. Type the product name to search, or capture its label to add it."))
+            return
+        }
+        // Identity resolved; the portion still needs the user (LOOKUP-007).
+        if case .namedServing = food.basis {
+            let scaled = try? PortionEngine.scale(food: food, portion: PortionRequest(.servings(1)))
+            if let scaled {
+                let preview = MealPreview(
+                    items: [MealItemSnapshot.from(food: food, scaled: scaled, portionDescription: "1 serving — adjust before adding")],
+                    unresolvedMentions: [],
+                    isHypothetical: false,
+                    logDay: appModel.selectedDay
+                )
+                append(.preview(preview))
+                return
+            }
+        }
+        append(.assistantText("Found \(food.canonicalName). Tell me the amount (e.g. “150 g \(food.canonicalName.lowercased())”)."))
+    }
+
+    /// Announce a label-captured food saved from the review sheet (DEVICE-002).
+    func announceSavedLabelFood(_ food: FoodVersion) {
+        append(.receipt("Saved “\(food.canonicalName)” from your label (evidence: your transcribed label). Log it by name or amount whenever you eat it."))
     }
 
     // MARK: Commit
@@ -303,51 +368,3 @@ final class ChatModel {
     }
 }
 
-/// Seed foods for the P0 slice (CAT-001): the user's own transcribed labels,
-/// clearly marked as user-entered evidence. Synthetic fixtures never surface
-/// in search; there are no invented "official" records here.
-enum SeedCatalog {
-    static let foods: [FoodVersion] = [
-        FoodVersion(
-            foodID: "user-ham",
-            versionID: "1",
-            canonicalName: "Ham, sliced (my label)",
-            basis: .namedServing(name: "1 serving", massG: 56, volumeML: nil),
-            nutrients: [
-                .energyKcal: .known(60),
-                .proteinG: .known(9),
-                .fiberG: .unknown(reason: "Not on label")
-            ],
-            evidence: SourceEvidence(sourceID: "U01", sourceLocator: "User label photo transcription", evidenceType: .userEnteredLabel)
-        ),
-        FoodVersion(
-            foodID: "user-shake",
-            versionID: "1",
-            canonicalName: "Protein shake (my label)",
-            basis: .namedServing(name: "1 container", massG: nil, volumeML: nil),
-            nutrients: [
-                .energyKcal: .known(130),
-                .proteinG: .known(30),
-                .fiberG: .known(1)
-            ],
-            evidence: SourceEvidence(sourceID: "U02", sourceLocator: "User label photo transcription", evidenceType: .userEnteredLabel)
-        ),
-        FoodVersion(
-            foodID: "user-tray",
-            versionID: "1",
-            canonicalName: "Factor meal tray (my label)",
-            basis: .namedServing(name: "1 tray", massG: 340, volumeML: nil),
-            nutrients: [
-                .energyKcal: .known(500),
-                .proteinG: .known(43),
-                .fiberG: .known(7)
-            ],
-            evidence: SourceEvidence(sourceID: "U03", sourceLocator: "User label photo transcription", evidenceType: .userEnteredLabel)
-        )
-    ]
-
-    static let aliases: [FoodAlias] = [
-        FoodAlias(alias: "my ham", foodID: "user-ham", preferredVersionID: "1"),
-        FoodAlias(alias: "my shake", foodID: "user-shake", preferredVersionID: "1")
-    ]
-}

@@ -23,6 +23,31 @@ open NimaWellness.xcodeproj
 
 Then select your signing team under Signing & Capabilities and run on the 16e.
 
+## P1 capabilities (HealthKit, widgets, scanner, reminders)
+
+The P1 features need a few Xcode-side switches. Option A's `project.yml`
+already carries the Info.plist strings and entitlements; with Option B, add
+them by hand:
+
+- **HealthKit (read-only)**: Signing & Capabilities → + HealthKit. Info.plist:
+  `NSHealthShareUsageDescription`. The app requests permission only for the
+  types you enable in Settings → Health, when you enable them.
+- **Camera (barcode scanner only)**: Info.plist `NSCameraUsageDescription`.
+  Typed search and label capture from Photos work without it.
+- **App Group** (interactive widgets + quick actions sharing the store):
+  Signing & Capabilities → + App Groups → `group.com.nimasajedi.nimawellness`
+  on BOTH the app and the widget extension. Must match
+  `PersistenceFactory.appGroupIdentifier`. Without it the app still works;
+  widgets fall back to read-only snapshots.
+  Note: if the app ran before adding the group, its store moves location —
+  either reinstall the app or migrate the store file manually.
+- **Widget extension**: File → New → Target → Widget Extension named
+  `NimaWellnessWidgets` (no configuration intent), delete the template files,
+  then add `apps/ios/NimaWellnessWidgets/NimaWellnessWidgets.swift` plus the
+  shared files listed in its header comment, and the WellnessCore package.
+- **Notifications**: no capability needed; the app asks for permission the
+  first time you add a reminder.
+
 ## Option B: Manual project creation
 
 1. Xcode → File → New → Project → iOS → App.
@@ -68,6 +93,10 @@ config validation, legacy-import dedup). They do not need a device or model.
 
 ## What is intentionally NOT here yet
 
-- No web resolver, HealthKit, barcode/OCR, widgets, or USDA catalog (M4/M5/P1).
+- No web resolver or USDA catalog packs (M4/M5) — barcode/label lookups
+  resolve against your local foods only and fail honestly otherwise.
+- No HealthKit writes (read-only in this release), no dedicated voice feature
+  (keyboard dictation covers P0/P1), no additional restaurant adapters
+  (they belong to the M4 resolver).
 - No cloud inference or paid APIs anywhere — verify with a network inspector;
   the only model calls are Apple's on-device Foundation Models framework.

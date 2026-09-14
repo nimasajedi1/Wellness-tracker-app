@@ -10,16 +10,9 @@ struct NimaWellnessApp: App {
     init() {
         do {
             // Personal data store, separate from any future catalog store
-            // (STORE-001). No CloudKit/iCloud sync in P0 (PRIV-002).
-            let schema = Schema([
-                ObservationRecord.self,
-                MealEntryRecord.self,
-                ManualAdjustmentRecord.self,
-                MutationReceiptRecord.self,
-                ConfigurationVersionRecord.self
-            ])
-            let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
-            container = try ModelContainer(for: schema, configurations: [configuration])
+            // (STORE-001). No CloudKit/iCloud sync (PRIV-002). Shared with
+            // quick-action intents via PersistenceFactory (DEVICE-003).
+            container = try PersistenceFactory.makeContainer()
         } catch {
             fatalError("Failed to create personal data store: \(error)")
         }
