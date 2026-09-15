@@ -42,6 +42,16 @@ M0 scaffolding plus the M1 tracker slice and early M2/M3 slices, as code:
   commands; local reminders with quiet hours; Busy workday and Travel day
   templates. See `docs/P1_HANDOFF.md`.
 
+- **P2 / DEVICE-007** (third commit): iOS 27 native nutrition-label
+  understanding — Vision `RecognizeDocumentsRequest` document extraction into
+  an app-owned structured label schema, deterministic validation (units,
+  bounds, %DV vs absolute, arithmetic flags, multi-column bases), a review
+  screen with the image beside correctable values, versioned no-overwrite
+  food updates, and full degradation to the DEVICE-002 path below iOS 27.
+  The optional Foundation Models image-interpretation refinement is compiled
+  out behind `NIMA_FM_IMAGE_LABELS` until the SDK surface is verified.
+  See `docs/P2_DEVICE-007_HANDOFF.md`.
+
 Not yet built (by design, per the milestone plan): web resolver and restaurant
 adapters (M4), USDA catalog packs (M5), Developer Lab/beta evidence (M6).
 

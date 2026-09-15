@@ -48,6 +48,24 @@ them by hand:
 - **Notifications**: no capability needed; the app asks for permission the
   first time you add a reminder.
 
+## P2: iOS 27 label understanding (DEVICE-007)
+
+No new capability is required — the enhanced label path uses the same photo
+picker and runs entirely on device. Two things to check on the Mac:
+
+- `Infrastructure/Vision/StructuredLabelExtractor.swift` traverses the new
+  Vision `RecognizeDocumentsRequest` document hierarchy (`document`,
+  `tables`, `text.transcript`, `barcodes`). Verify those property names
+  against the installed iOS 27 SDK; the traversal is deliberately thin and
+  easy to adjust. On devices below iOS 27 the app automatically uses the
+  DEVICE-002 line-recognition path — the baseline OS requirement is unchanged.
+- The optional Foundation Models image-interpretation refinement is compiled
+  OUT by default. To try it, verify the SDK exposes image prompting and the
+  Vision `OCRTool`/`BarcodeReaderTool` tool types, then add
+  `NIMA_FM_IMAGE_LABELS` to the target's Active Compilation Conditions.
+  Every value it produces still passes the same deterministic validator and
+  review screen; any model failure keeps the Vision draft.
+
 ## Option B: Manual project creation
 
 1. Xcode → File → New → Project → iOS → App.

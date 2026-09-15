@@ -195,6 +195,7 @@ After each coding slice, replace the final column with the implementation/test r
 | DEVICE-004 | P1 | Local reminders | Device / permission / integration | Add implementation-specific case | Not implemented / not run |
 | DEVICE-005 | P0/P1 | Text and speech | Device / permission / integration | Add implementation-specific case | Not implemented / not run |
 | DEVICE-006 | P2 | Alternative local models | Device / permission / integration | Add implementation-specific case | Not implemented / not run |
+| DEVICE-007 | P2 | iOS 27 native nutrition-label understanding | Device / vision / model / unit validation | Add implementation-specific case | Not implemented / not run |
 | PRIV-001 | P0 | Local by default | Privacy review / deletion / network | REG-053 | Not implemented / not run |
 | PRIV-002 | P0 | No implicit sync | Privacy review / deletion / network | Add implementation-specific case | Not implemented / not run |
 | PRIV-003 | P0 | Storage protection | Privacy review / deletion / network | Add implementation-specific case | Not implemented / not run |

@@ -53,8 +53,15 @@ struct ChatView: View {
                 }
             }
             .sheet(isPresented: $showLabelCapture) {
-                LabelCaptureSheet { food in
-                    chatModel?.announceSavedLabelFood(food)
+                // DEVICE-007 on iOS 27; DEVICE-002 remains the baseline path.
+                if #available(iOS 27.0, *), StructuredLabelExtractorFactory.usesDocumentPath {
+                    EnhancedLabelCaptureSheet { food in
+                        chatModel?.announceSavedLabelFood(food)
+                    }
+                } else {
+                    LabelCaptureSheet { food in
+                        chatModel?.announceSavedLabelFood(food)
+                    }
                 }
             }
         }

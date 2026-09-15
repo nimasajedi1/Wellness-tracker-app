@@ -642,6 +642,16 @@ final class AppModel {
         }
     }
 
+    /// Next version ID for an update to one of the user's own foods
+    /// (DEVICE-007): an update is always a new immutable version, never an
+    /// overwrite, so earlier diary snapshots keep their values (FOOD-001).
+    func nextUserFoodVersionID(foodID: String) -> String {
+        let existing = userFoods
+            .filter { $0.foodID == foodID }
+            .compactMap { Int($0.versionID) }
+        return String((existing.max() ?? 0) + 1)
+    }
+
     /// Save a favorite: identity plus preferred portion (FOOD-014).
     func saveFavorite(_ alias: FoodAlias) {
         do {
@@ -654,8 +664,10 @@ final class AppModel {
     }
 
     /// All foods resolvable locally: the user's own label foods plus seeds.
+    /// Latest versions sort first so new lookups resolve the newest reviewed
+    /// label; older versions stay available for diary snapshots (REG-051).
     var resolvableFoods: [FoodVersion] {
-        SeedCatalog.foods + userFoods
+        SeedCatalog.foods + userFoods.sorted { (Int($0.versionID) ?? 0) > (Int($1.versionID) ?? 0) }
     }
 
     var resolvableAliases: [FoodAlias] {
